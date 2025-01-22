@@ -1,9 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 import time
-
 from datetime import datetime, timedelta
-
+import os
 
 # Конфигурация
 link = 'https://freelance.habr.com/tasks'
@@ -12,11 +11,10 @@ telegram_chat_id = '7482542861'  # Замените на ID вашего чат�
 history_file = 'orders_history.txt'  # Файл для хранения ссылок на заказы
 polling_interval = 60  # Интервал опроса в секундах
 
-
 def send_telegram_message(message):
     """Отправляет сообщение в Telegram."""
     utc_offset = timedelta(hours=0)  # Смещение Московского времени относительно UTC
-    current_time_msk = datetime.now()
+    current_time_msk = datetime.now() + utc_offset
 
     # Формирование сообщения для отправки в Telegram
     message_text = (
@@ -32,72 +30,72 @@ def send_telegram_message(message):
         "text": message_text,
     }
 
-    response = requests.post(url, data=data)
-
+    try:
+        response = requests.post(url, data=data)
+        if response.status_code == 200:
+            print(f"Сообщение успешно отправлено: {message_text}")
+        else:
+            print(f"Ошибка отправки сообщения в Telegram: {response.status_code}, {response.text}")
+    except Exception as e:
+        print(f"Ошибка при отправке сообщения: {e}")
 
 def load_history():
     """Загружает историю обработанных заказов из файла."""
+    if not os.path.exists(history_file):
+        # Создаем файл, если его нет
+        with open(history_file, 'w'):
+            pass
     try:
         with open(history_file, 'r') as file:
             return set(file.read().splitlines())
-    except FileNotFoundError:
+    except Exception as e:
+        print(f"Ошибка при загрузке истории: {e}")
         return set()
-
 
 def save_to_history(href):
     """Сохраняет ссылку на заказ в файл."""
-    with open(history_file, 'a') as file:
-        file.write(href + '\n')
-
+    try:
+        with open(history_file, 'a') as file:
+            file.write(href + '\n')
+    except Exception as e:
+        print(f"Ошибка при сохранении истории: {e}")
 
 def fetch_new_orders():
     """Получает новые заказы с сайта."""
-    response = requests.get(link)
-    if response.status_code != 200:
-        print(f"Ошибка запроса: {response.status_code}")
+    try:
+        response = requests.get(link)
+        if response.status_code != 200:
+            print(f"Ошибка запроса: {response.status_code}")
+            return []
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        content_list_items = soup.find_all(class_='content-list__item')
+        new_orders = []
+
+        for item in content_list_items:
+            task_title = item.find(class_='task__title')
+            if task_title:
+                task_link = task_title.find('a')
+                if task_link:
+                    href = task_link.get('href')
+                    full_link = 'https://freelance.habr.com' + href
+                    title = task_title.get_text(strip=True)
+                    new_orders.append((full_link, title))
+                    
+        return new_orders
+    except Exception as e:
+        print(f"Ошибка при получении заказов: {e}")
         return []
 
-    soup = BeautifulSoup(response.text, 'html.parser')
-    content_list_items = soup.find_all(class_='content-list__item')
-    new_orders = []
-
-    for item in content_list_items:
-
-        task_title = item.find(class_='task__title')
-
-        if task_title:
-
-            task_link = task_title.find('a')
-
-            if task_link:
-                
-                href = task_link.get('href')
-                full_link = 'https://freelance.habr.com' + href
-                title = task_title.get_text(strip=True)
-                new_orders.append((full_link, title))
-                
-    for url, title in new_orders:
-
-        print(url)
-        print(title)
-        print('\n')
-
-    return new_orders
-
-
 def main():
-
     print("Бот запущен...")
     processed_links = load_history()
 
     while True:
-
         new_orders = fetch_new_orders()
 
         for full_link, title in new_orders:
-
             if full_link not in processed_links:
-
                 message = {
                     'title': title,
                     'url': full_link
@@ -110,7 +108,6 @@ def main():
 
         # Задержка между запросами
         time.sleep(polling_interval)
-
 
 if __name__ == '__main__':
     main()
