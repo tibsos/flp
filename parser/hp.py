@@ -62,16 +62,22 @@ def fetch_new_orders():
     new_orders = []
 
     for item in content_list_items:
+
         task_title = item.find(class_='task__title')
+
         if task_title:
+
             task_link = task_title.find('a')
+
             if task_link:
+                
                 href = task_link.get('href')
                 full_link = 'https://freelance.habr.com' + href
                 title = task_title.get_text(strip=True)
                 new_orders.append((full_link, title))
                 
     for url, title in new_orders:
+
         print(url)
         print(title)
         print('\n')
@@ -80,14 +86,18 @@ def fetch_new_orders():
 
 
 def main():
+
     print("Бот запущен...")
     processed_links = load_history()
 
     while True:
+
         new_orders = fetch_new_orders()
 
         for full_link, title in new_orders:
+
             if full_link not in processed_links:
+
                 message = {
                     'title': title,
                     'url': full_link
